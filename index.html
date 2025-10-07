@@ -1,0 +1,1076 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CPU Scheduling Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --base-bg: #0f172a; /* Deep Charcoal Blue */
+            --card-bg: #1f2937; /* Soft Dark Gray */
+            --text-color: #e2e8f0; /* Light Slate */
+            --accent-color: #4f46e5; /* Vibrant Indigo */
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background-color: var(--base-bg);
+            color: var(--text-color);
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 16px;
+            box-shadow: 0 10px 15px rgba(0, 0, 0, 0.2);
+            padding: 1.5rem;
+        }
+
+        .input-group {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.5rem 1rem;
+        }
+
+        @media (min-width: 1024px) {
+            .input-group {
+                grid-template-columns: repeat(5, 1fr);
+            }
+        }
+
+        input[type="text"], input[type="number"], select {
+            background-color: #334155;
+            border: 1px solid #475569;
+            color: var(--text-color);
+            padding: 0.75rem;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+        
+        input:focus, select:focus {
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.5);
+            outline: none;
+        }
+        
+        .gantt-bar {
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            border-radius: 4px;
+            margin-right: 4px;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .gantt-bar:hover {
+            opacity: 0.9;
+            box-shadow: 0 0 10px var(--accent-color);
+        }
+        
+        .gantt-time {
+            position: absolute;
+            bottom: -20px;
+            right: -10px;
+            font-size: 0.75rem;
+            color: #94a3b8;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background-color: #475569;
+            border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: var(--card-bg);
+        }
+
+        /* AI Tutor Style */
+        #ai-tutor-output {
+            background-color: #172554; 
+            border: 2px solid #3b82f6; 
+            color: #dbeafe;
+            padding: 1rem;
+            border-radius: 12px;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-10">
+
+    <header class="max-w-7xl mx-auto mb-10">
+        <h1 class="text-4xl font-extrabold text-white mb-2">OS Scheduler</h1>
+        <p class="text-lg text-slate-400">Model and visualize CPU scheduling algorithms (FCFS, SJF, EDF, RR) and get detailed AI explanations.</p>
+    </header>
+
+    <div id="app" class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        <div class="lg:col-span-1 space-y-8">
+            
+            <!-- Process List Card -->
+            <div class="card flex flex-col h-[30rem] lg:h-[32rem]">
+                <h2 class="text-2xl font-semibold mb-4 text-white">Process Queue</h2>
+                <div id="processes-list-container" class="flex-grow overflow-y-auto custom-scrollbar pr-2">
+                    <table class="w-full text-left text-sm">
+                        <thead class="sticky top-0 bg-[#2d3a4b] z-10 text-slate-300">
+                            <tr>
+                                <th class="py-3 px-2">ID</th>
+                                <th class="py-3 px-2">Arr</th>
+                                <th class="py-3 px-2">Burst</th>
+                                <th class="py-3 px-2">Deadline</th>
+                                <th class="py-3 px-2">Pri</th>
+                            </tr>
+                        </thead>
+                        <tbody id="processes-table-body">
+                            <tr><td colspan="5" class="pt-6 text-center text-slate-400" id="no-processes-msg">No processes added yet.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-4 flex space-x-3">
+                    <button onclick="editProcess()" id="edit-button" class="px-4 py-3 text-sm bg-indigo-600 hover:bg-indigo-700 rounded-xl transition duration-150 shadow-lg flex-1 font-medium" disabled>Edit Selected</button>
+                    <button onclick="removeProcess()" id="remove-button" class="px-4 py-3 text-sm bg-rose-600 hover:bg-rose-700 rounded-xl transition duration-150 shadow-lg flex-1 font-medium" disabled>Remove Selected</button>
+                </div>
+            </div>
+
+            <!-- Add/Edit Process Card -->
+            <div class="card">
+                <h3 class="text-xl font-semibold mb-5 text-white" id="form-title">Add New Process</h3>
+                <form id="add-process-form" class="space-y-4">
+                    <div class="input-group">
+                        <div>
+                            <label for="proc-id" class="block text-xs font-medium text-slate-400 mb-1">Process ID</label>
+                            <input type="text" id="proc-id" placeholder="P1" required class="w-full text-sm">
+                        </div>
+                        <div>
+                            <label for="arr-time" class="block text-xs font-medium text-slate-400 mb-1">Arrival Time</label>
+                            <input type="number" id="arr-time" placeholder="0" required min="0" value="0" class="w-full text-sm">
+                        </div>
+                        <div>
+                            <label for="burst-time" class="block text-xs font-medium text-slate-400 mb-1">Burst Time</label>
+                            <input type="number" id="burst-time" placeholder="Burst" required min="1" class="w-full text-sm">
+                        </div>
+                        <div>
+                            <label for="deadline" class="block text-xs font-medium text-slate-400 mb-1">Deadline</label>
+                            <input type="number" id="deadline" placeholder="Deadline" min="1" class="w-full text-sm">
+                        </div>
+                        <div>
+                            <label for="priority" class="block text-xs font-medium text-slate-400 mb-1">Priority</label>
+                            <input type="number" id="priority" placeholder="Priority" min="1" class="w-full text-sm">
+                        </div>
+                    </div>
+                    <button type="submit" id="submit-process-button" class="w-full py-3 mt-4 bg-emerald-600 hover:bg-emerald-700 rounded-xl transition duration-150 font-semibold text-lg shadow-xl">Add Process</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="lg:col-span-2 space-y-8">
+            
+            <!-- Scheduler Control Card -->
+            <div class="card flex justify-between items-center flex-wrap gap-4">
+                <div class="flex flex-col md:flex-row items-start md:items-center space-y-2 md:space-y-0 md:space-x-4">
+                    <label for="algorithm-select" class="font-semibold text-lg whitespace-nowrap">Scheduling Algorithm:</label>
+                    <select id="algorithm-select" class="p-3 bg-[#334155] border border-[#475569] rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-indigo-500 min-w-[250px] transition duration-200">
+                        <option value="FCFS (First-Come, First-Served)">FCFS (First-Come, First-Served)">FCFS (First-Come, First-Served)</option>
+                        <option value="SJF (Shortest Job First - Non-Preemptive)">SJF (Shortest Job First - Non-Preemptive)</option>
+                        <option value="EDF (Earliest Deadline First - Preemptive)">EDF (Earliest Deadline First - Preemptive)</option>
+                        <option value="RR (Round Robin - Time Quantum: 2)">RR (Round Robin - Time Quantum: 2)</option>
+                    </select>
+                </div>
+                <button onclick="startSimulation()" id="start-simulation-button" class="px-8 py-3 bg-indigo-600 hover:bg-indigo-700 rounded-xl transition duration-150 font-bold text-lg shadow-2xl shadow-indigo-500/50">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"/></svg>
+                    Run Simulation
+                </button>
+            </div>
+
+            <!-- Results Card -->
+            <div class="card p-6">
+                <h3 class="text-2xl font-semibold mb-6 text-white">Simulation Results</h3>
+                
+                <h4 class="text-xl font-medium mb-3">Gantt Chart Timeline</h4>
+                <div id="gantt-chart-container" class="overflow-x-auto whitespace-nowrap pb-6">
+                    <div id="gantt-chart" class="flex min-w-full h-16 items-center">
+                        <p class="text-slate-400">No schedule generated yet. Run the simulation!</p>
+                    </div>
+                </div>
+
+                <h4 class="text-xl font-medium mt-8 mb-4">Performance Metrics</h4>
+                <div id="metrics-container" class="text-sm space-y-2">
+                </div>
+            </div>
+
+            <!-- AI Tutor Card -->
+            <div class="card">
+                <h3 class="text-2xl font-semibold mb-4 text-white flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-400 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2zM8 7h8m-8 4h8"/></svg>
+                    AI Tutor Explanation
+                </h3>
+                <div id="ai-tutor-output" class="text-base leading-relaxed">
+                    The AI tutor's explanation of the scheduling process and metrics will appear here automatically after the simulation runs.
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Modal for Alerts/Editing -->
+    <div id="modal-container" class="fixed inset-0 bg-black bg-opacity-75 hidden items-center justify-center p-4 z-50">
+        <div class="card p-6 w-full max-w-md">
+            <h4 class="text-2xl font-bold mb-4 text-white" id="modal-title"></h4>
+            <div id="modal-content" class="text-slate-300"></div>
+            <div class="flex justify-end space-x-3 mt-6">
+                <button onclick="closeModal()" class="px-5 py-2 bg-slate-600 hover:bg-slate-700 rounded-xl transition duration-150 font-medium">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_KEY = "";
+        const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${API_KEY}`;
+        const TIME_QUANTUM = 2;
+        
+        let processes = [];
+        let simulationResult = null;
+        let editIndex = -1;
+
+        const processTableBody = document.getElementById('processes-table-body');
+        const noProcessesMsg = document.getElementById('no-processes-msg');
+        const addProcessForm = document.getElementById('add-process-form');
+        const submitProcessButton = document.getElementById('submit-process-button');
+        const editButton = document.getElementById('edit-button');
+        const removeButton = document.getElementById('remove-button');
+        const ganttChart = document.getElementById('gantt-chart');
+        const metricsContainer = document.getElementById('metrics-container');
+        const aiTutorOutput = document.getElementById('ai-tutor-output');
+        const algorithmSelect = document.getElementById('algorithm-select');
+        
+        const deadlineInput = document.getElementById('deadline');
+        const priorityInput = document.getElementById('priority');
+
+        function closeModal() {
+            document.getElementById('modal-container').classList.add('hidden');
+            document.getElementById('modal-container').classList.remove('flex');
+            if (editIndex !== -1) {
+                editIndex = -1;
+                document.getElementById('proc-id').disabled = false;
+                submitProcessButton.textContent = 'Add Process';
+                document.getElementById('proc-id').value = '';
+                document.getElementById('arr-time').value = 0;
+                document.getElementById('burst-time').value = '';
+                document.getElementById('deadline').value = '';
+                document.getElementById('priority').value = '';
+                toggleRequiredInputs();
+            }
+        }
+        
+        function toggleRequiredInputs() {
+            const algorithm = algorithmSelect.value;
+            
+            const disableInput = (input) => {
+                input.disabled = true;
+                input.classList.remove('bg-slate-800', 'focus:ring-indigo-500');
+                input.classList.add('opacity-50', 'bg-slate-700/70', 'cursor-not-allowed', 'focus:ring-transparent');
+                input.value = '';
+            };
+            
+            const enableInput = (input) => {
+                input.disabled = false;
+                input.classList.remove('opacity-50', 'bg-slate-700/70', 'cursor-not-allowed', 'focus:ring-transparent');
+                input.classList.add('bg-slate-800', 'focus:ring-indigo-500');
+            };
+
+            enableInput(deadlineInput);
+            enableInput(priorityInput);
+
+
+            if (algorithm.includes('FCFS') || algorithm.includes('SJF') || algorithm.includes('RR')) {
+                disableInput(deadlineInput);
+                disableInput(priorityInput);
+            } else if (algorithm.includes('EDF')) {
+                disableInput(priorityInput);
+            }
+        }
+        algorithmSelect.addEventListener('change', toggleRequiredInputs);
+
+
+        function showAlert(title, message) {
+            const modalContainer = document.getElementById('modal-container');
+            document.getElementById('modal-title').textContent = title;
+            document.getElementById('modal-content').innerHTML = `<p>${message}</p>`;
+            modalContainer.classList.remove('hidden');
+            modalContainer.classList.add('flex');
+        }
+
+        async function withExponentialBackoff(fn, maxRetries = 5) {
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    return await fn();
+                } catch (error) {
+                    if (i === maxRetries - 1) throw error;
+                    const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+        }
+
+        function getProcessColor(id) {
+            const colors = ['bg-blue-600', 'bg-green-600', 'bg-red-600', 'bg-yellow-600', 'bg-purple-600', 'bg-pink-600', 'bg-teal-600', 'bg-indigo-600'];
+            let hash = 0;
+            for (let i = 0; i < id.length; i++) {
+                hash = id.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            return colors[Math.abs(hash) % colors.length];
+        }
+
+        function renderProcesses(selectedId = null) {
+            processTableBody.innerHTML = '';
+            
+            if (processes.length === 0) {
+                noProcessesMsg.classList.remove('hidden');
+                editButton.disabled = true;
+                removeButton.disabled = true;
+                return;
+            }
+
+            noProcessesMsg.classList.add('hidden');
+            
+            processes.forEach((p, index) => {
+                const color = getProcessColor(p.id);
+                const row = document.createElement('tr');
+                row.className = `cursor-pointer hover:bg-[#3d4b5b] transition duration-150 ${p.id === selectedId ? 'bg-indigo-700/50' : ''}`;
+                row.onclick = () => selectProcess(p.id);
+                row.innerHTML = `
+                    <td class="py-3 px-2 font-bold ${color.replace('bg-', 'text-')}">${p.id}</td>
+                    <td class="py-3 px-2">${p.arrivalTime}</td>
+                    <td class="py-3 px-2">${p.burstTime}</td>
+                    <td class="py-3 px-2">${p.deadline || '-'}</td>
+                    <td class="py-3 px-2">${p.priority || '-'}</td>
+                `;
+                processTableBody.appendChild(row);
+            });
+
+            const selected = processes.find(p => p.id === selectedId);
+            editButton.disabled = !selected;
+            removeButton.disabled = !selected;
+        }
+
+        function selectProcess(id) {
+            const currentSelected = processTableBody.querySelector('.bg-indigo-700\\/50');
+            if (currentSelected) {
+                currentSelected.classList.remove('bg-indigo-700/50');
+            }
+            const newSelected = Array.from(processTableBody.rows).find(row => row.children[0].textContent === id);
+            if (newSelected) {
+                newSelected.classList.add('bg-indigo-700/50');
+                processTableBody.dataset.selectedId = id;
+                editButton.disabled = false;
+                removeButton.disabled = false;
+            } else {
+                processTableBody.dataset.selectedId = '';
+                editButton.disabled = true;
+                removeButton.disabled = true;
+            }
+        }
+
+        function editProcess() {
+            const selectedId = processTableBody.dataset.selectedId;
+            if (!selectedId) return showAlert('Error', 'Please select a process to edit.');
+            
+            const processToEdit = processes.find(p => p.id === selectedId);
+            editIndex = processes.findIndex(p => p.id === selectedId);
+            
+            document.getElementById('proc-id').disabled = true;
+            document.getElementById('proc-id').value = processToEdit.id;
+            document.getElementById('arr-time').value = processToEdit.arrivalTime;
+            document.getElementById('burst-time').value = processToEdit.burstTime;
+            document.getElementById('deadline').value = processToEdit.deadline || '';
+            document.getElementById('priority').value = processToEdit.priority || '';
+            
+            submitProcessButton.textContent = `Update Process ${processToEdit.id}`;
+            document.getElementById('form-title').textContent = `Editing Process ${processToEdit.id}`;
+
+            closeModal();
+            
+            renderProcesses(selectedId);
+            
+            deadlineInput.disabled = false;
+            priorityInput.disabled = false;
+            deadlineInput.classList.remove('opacity-50', 'bg-slate-700/70', 'cursor-not-allowed', 'focus:ring-transparent');
+            deadlineInput.classList.add('bg-slate-800', 'focus:ring-indigo-500');
+            priorityInput.classList.remove('opacity-50', 'bg-slate-700/70', 'cursor-not-allowed', 'focus:ring-transparent');
+            priorityInput.classList.add('bg-slate-800', 'focus:ring-indigo-500');
+        }
+
+        function removeProcess() {
+            const selectedId = processTableBody.dataset.selectedId;
+            if (!selectedId) return showAlert('Error', 'Please select a process to remove.');
+
+            processes = processes.filter(p => p.id !== selectedId);
+            processTableBody.dataset.selectedId = '';
+            renderProcesses();
+            simulationResult = null;
+            renderGanttChart();
+        }
+
+        addProcessForm.onsubmit = function(event) {
+            event.preventDefault();
+            
+            const id = document.getElementById('proc-id').value.trim();
+            const arrivalTime = Math.max(0, parseInt(document.getElementById('arr-time').value) || 0);
+            const burstTime = Math.max(1, parseInt(document.getElementById('burst-time').value) || 1);
+            
+            const rawDeadline = deadlineInput.disabled ? null : parseInt(document.getElementById('deadline').value);
+            const rawPriority = priorityInput.disabled ? null : parseInt(document.getElementById('priority').value);
+            
+            const deadline = (isNaN(rawDeadline) || rawDeadline < 1) ? null : rawDeadline;
+            const priority = (isNaN(rawPriority) || rawPriority < 1) ? null : rawPriority;
+
+            if (!id || burstTime < 1) {
+                return showAlert('Input Error', 'Please fill in a valid ID and Burst Time (must be > 0).');
+            }
+
+            const newProcess = {
+                id,
+                arrivalTime,
+                burstTime,
+                deadline,
+                priority,
+                remainingTime: burstTime,
+                color: getProcessColor(id)
+            };
+
+            if (editIndex !== -1) {
+                processes[editIndex] = { ...processes[editIndex], ...newProcess };
+                editIndex = -1;
+                document.getElementById('proc-id').disabled = false;
+                submitProcessButton.textContent = 'Add Process';
+                document.getElementById('form-title').textContent = 'Add New Process';
+                document.getElementById('proc-id').value = '';
+                document.getElementById('arr-time').value = 0;
+                document.getElementById('burst-time').value = '';
+                document.getElementById('deadline').value = '';
+                document.getElementById('priority').value = '';
+                toggleRequiredInputs();
+            } else {
+                if (processes.some(p => p.id === id)) {
+                    return showAlert('Input Error', `A process with ID "${id}" already exists. Use a unique ID or edit the existing process.`);
+                }
+                processes.push(newProcess);
+                addProcessForm.reset();
+                document.getElementById('arr-time').value = 0;
+            }
+
+            processes.sort((a, b) => a.arrivalTime - b.arrivalTime);
+            renderProcesses(newProcess.id);
+            simulationResult = null;
+            renderGanttChart();
+        };
+
+        function simplifyTimeline(timeline) {
+            const simplified = [];
+            if (timeline.length === 0) return simplified;
+
+            let currentSegment = { ...timeline[0] };
+
+            for (let i = 1; i < timeline.length; i++) {
+                const nextSegment = timeline[i];
+
+                if (nextSegment.id === currentSegment.id && nextSegment.start === currentSegment.end) {
+                    currentSegment.end = nextSegment.end;
+                } else {
+                    simplified.push(currentSegment);
+                    currentSegment = { ...nextSegment };
+                }
+            }
+            simplified.push(currentSegment);
+
+            return simplified.filter(s => s.start !== s.end);
+        }
+
+        function calculateMetrics(completedJobs, totalTime, originalProcesses) {
+            const originalMap = originalProcesses.reduce((map, p) => {
+                map[p.id] = p.burstTime;
+                return map;
+            }, {});
+
+            const results = completedJobs.map(job => {
+                const burst = originalMap[job.id] || 0;
+                const waitingTime = job.finishTime - job.arrivalTime - burst;
+                const turnaroundTime = job.finishTime - job.arrivalTime;
+                return {
+                    id: job.id,
+                    burstTime: burst,
+                    arrivalTime: job.arrivalTime,
+                    finishTime: job.finishTime,
+                    startTime: job.startTime,
+                    waitingTime: waitingTime,
+                    turnaroundTime: turnaroundTime,
+                };
+            });
+
+            const totalWaitingTime = results.reduce((sum, r) => sum + r.waitingTime, 0);
+            const totalTurnaroundTime = results.reduce((sum, r) => sum + r.turnaroundTime, 0);
+            
+            return {
+                avgWaitingTime: (totalWaitingTime / results.length).toFixed(2),
+                avgTurnaroundTime: (totalTurnaroundTime / results.length).toFixed(2),
+                totalTime: totalTime,
+                jobResults: results.sort((a, b) => a.id.localeCompare(b.id))
+            };
+        }
+
+        function runFCFS(procs) {
+            const originalProcesses = JSON.parse(JSON.stringify(procs));
+            const jobs = JSON.parse(JSON.stringify(procs));
+            
+            jobs.sort((a, b) => {
+                if (a.arrivalTime !== b.arrivalTime) {
+                    return a.arrivalTime - b.arrivalTime;
+                }
+                const idA = parseInt(a.id.replace(/\D/g, '')) || 0;
+                const idB = parseInt(b.id.replace(/\D/g, '')) || 0;
+                return idA - idB;
+            });
+
+            let currentTime = 0;
+            const timeline = [];
+            const completedJobs = [];
+
+            for (const job of jobs) {
+                const startTime = Math.max(currentTime, job.arrivalTime);
+                const finishTime = startTime + job.burstTime;
+                
+                if (startTime > currentTime) {
+                    timeline.push({ id: 'Idle', start: currentTime, end: startTime, color: 'bg-slate-700' });
+                }
+
+                timeline.push({ id: job.id, start: startTime, end: finishTime, color: job.color });
+                
+                completedJobs.push({ 
+                    id: job.id, 
+                    arrivalTime: job.arrivalTime, 
+                    finishTime: finishTime,
+                    startTime: startTime 
+                });
+
+                currentTime = finishTime;
+            }
+
+            const metrics = calculateMetrics(completedJobs, currentTime, originalProcesses);
+            return { timeline: simplifyTimeline(timeline), metrics };
+        }
+        
+        function runSJF(procs) {
+            const originalProcesses = JSON.parse(JSON.stringify(procs));
+            const jobs = JSON.parse(JSON.stringify(procs));
+            const availableJobs = [];
+            const completedJobs = [];
+            const timeline = [];
+            let currentTime = 0;
+            
+            jobs.sort((a, b) => a.arrivalTime - b.arrivalTime);
+
+            while (jobs.length > 0 || availableJobs.length > 0) {
+                while (jobs.length > 0 && jobs[0].arrivalTime <= currentTime) {
+                    availableJobs.push(jobs.shift());
+                }
+
+                if (availableJobs.length === 0) {
+                    if (jobs.length > 0) {
+                        const nextArrivalTime = jobs[0].arrivalTime;
+                        if (nextArrivalTime > currentTime) {
+                            timeline.push({ id: 'Idle', start: currentTime, end: nextArrivalTime, color: 'bg-slate-700' });
+                            currentTime = nextArrivalTime;
+                            while (jobs.length > 0 && jobs[0].arrivalTime <= currentTime) {
+                                availableJobs.push(jobs.shift());
+                            }
+                        }
+                    } else {
+                        break;
+                    }
+                }
+
+                if (availableJobs.length > 0) {
+                    availableJobs.sort((a, b) => {
+                        if (a.burstTime !== b.burstTime) {
+                            return a.burstTime - b.burstTime;
+                        }
+                        return a.arrivalTime - b.arrivalTime;
+                    });
+
+                    const job = availableJobs.shift();
+                    const startTime = currentTime;
+                    const finishTime = startTime + job.burstTime;
+
+                    timeline.push({ id: job.id, start: startTime, end: finishTime, color: job.color });
+
+                    completedJobs.push({ 
+                        id: job.id, 
+                        arrivalTime: job.arrivalTime, 
+                        finishTime: finishTime,
+                        startTime: startTime 
+                    });
+
+                    currentTime = finishTime;
+                }
+            }
+
+            const metrics = calculateMetrics(completedJobs, currentTime, originalProcesses);
+            return { timeline: simplifyTimeline(timeline), metrics };
+        }
+
+        function runEDF(procs) {
+            const originalProcesses = JSON.parse(JSON.stringify(procs));
+            const activeJobs = JSON.parse(JSON.stringify(procs)).map(p => ({
+                ...p,
+                remainingTime: p.burstTime,
+                startTime: -1,
+                completed: false
+            })).sort((a, b) => a.arrivalTime - b.arrivalTime);
+
+            const timeline = [];
+            const completedJobs = {};
+            let currentTime = 0;
+            const totalBurst = activeJobs.reduce((sum, p) => sum + p.burstTime, 0);
+
+            let currentRunningProcess = null;
+
+            while (Object.keys(completedJobs).length < originalProcesses.length) {
+                
+                const arrivedJobs = activeJobs.filter(p => !p.completed && p.arrivalTime <= currentTime);
+                
+                let nextProcess = null;
+                if (arrivedJobs.length > 0) {
+                    arrivedJobs.sort((a, b) => {
+                        const deadlineA = a.deadline !== null ? a.deadline : Infinity;
+                        const deadlineB = b.deadline !== null ? b.deadline : Infinity;
+                        if (deadlineA !== deadlineB) {
+                            return deadlineA - deadlineB;
+                        }
+                        return a.arrivalTime - b.arrivalTime;
+                    });
+                    nextProcess = arrivedJobs[0];
+                }
+
+                let processToExecute = null;
+                if (nextProcess) {
+                    if (currentRunningProcess) {
+                        if (nextProcess.deadline < currentRunningProcess.deadline) {
+                            processToExecute = nextProcess;
+                        } else {
+                            processToExecute = currentRunningProcess;
+                        }
+                    } else {
+                        processToExecute = nextProcess;
+                    }
+                }
+                
+                if (processToExecute === null) {
+                    let nextArrivalTime = activeJobs.filter(p => !p.completed).map(p => p.arrivalTime).sort((a, b) => a - b)[0];
+
+                    if (nextArrivalTime !== undefined) {
+                        if (currentTime < nextArrivalTime) {
+                            timeline.push({ id: 'Idle', start: currentTime, end: nextArrivalTime, color: 'bg-slate-700' });
+                            currentTime = nextArrivalTime;
+                        }
+                        continue;
+                    } else {
+                        break;
+                    }
+                }
+                
+                if (currentRunningProcess && processToExecute.id !== currentRunningProcess.id) {
+                }
+
+                currentRunningProcess = processToExecute;
+
+                let runUntil = currentTime + currentRunningProcess.remainingTime;
+                
+                let nextArrival = activeJobs.filter(p => !p.completed && p.arrivalTime > currentTime)
+                                          .map(p => p.arrivalTime).sort((a, b) => a - b)[0];
+                
+                if (nextArrival !== undefined) {
+                    runUntil = Math.min(runUntil, nextArrival);
+                }
+                
+                const runDuration = runUntil - currentTime;
+
+                if (runDuration <= 0) {
+                    currentTime++;
+                    continue;
+                }
+                
+                if (currentRunningProcess.startTime === -1) {
+                    currentRunningProcess.startTime = currentTime;
+                }
+                
+                timeline.push({
+                    id: currentRunningProcess.id,
+                    start: currentTime,
+                    end: runUntil,
+                    color: currentRunningProcess.color
+                });
+                
+                currentRunningProcess.remainingTime -= runDuration;
+                currentTime = runUntil;
+
+                if (currentRunningProcess.remainingTime <= 0) {
+                    completedJobs[currentRunningProcess.id] = {
+                        id: currentRunningProcess.id,
+                        arrivalTime: currentRunningProcess.arrivalTime,
+                        finishTime: currentTime,
+                        startTime: currentRunningProcess.startTime
+                    };
+                    
+                    const completedIndex = activeJobs.findIndex(p => p.id === currentRunningProcess.id);
+                    if (completedIndex !== -1) {
+                        activeJobs[completedIndex].completed = true;
+                    }
+                    currentRunningProcess = null; 
+                }
+                
+                if (currentTime > totalBurst * 5) {
+                    break;
+                }
+            }
+
+            const metrics = calculateMetrics(Object.values(completedJobs), currentTime, originalProcesses);
+            return { timeline: simplifyTimeline(timeline), metrics };
+        }
+
+        function runRR(procs) {
+            const originalProcesses = JSON.parse(JSON.stringify(procs));
+            const jobs = JSON.parse(JSON.stringify(procs)).map(p => ({
+                ...p,
+                remainingTime: p.burstTime,
+                startTime: -1
+            })).sort((a, b) => a.arrivalTime - b.arrivalTime);
+            
+            const queue = [];
+            const timeline = [];
+            const completedJobs = {};
+            let currentTime = 0;
+            
+            const checkArrivals = () => {
+                while (jobs.length > 0 && jobs[0].arrivalTime <= currentTime) {
+                    const newJob = jobs.shift();
+                    queue.push(newJob);
+                }
+            };
+            
+            checkArrivals();
+
+            while (Object.keys(completedJobs).length < originalProcesses.length) {
+                
+                if (queue.length === 0) {
+                    if (jobs.length > 0) {
+                        const nextArrivalTime = jobs[0].arrivalTime;
+                        
+                        if (currentTime < nextArrivalTime) {
+                            timeline.push({ id: 'Idle', start: currentTime, end: nextArrivalTime, color: 'bg-slate-700' });
+                            currentTime = nextArrivalTime;
+                        }
+                        
+                        checkArrivals();
+                        
+                    } else {
+                        break;
+                    }
+                } else {
+                    const currentProcess = queue.shift();
+                    
+                    if (currentProcess.startTime === -1) {
+                        currentProcess.startTime = currentTime;
+                    }
+
+                    const quantumDuration = Math.min(TIME_QUANTUM, currentProcess.remainingTime);
+                    
+                    let nextArrival = Infinity;
+                    if (jobs.length > 0) {
+                        nextArrival = jobs[0].arrivalTime;
+                    }
+                    
+                    const runDuration = Math.min(quantumDuration, nextArrival - currentTime);
+                    const runUntil = currentTime + runDuration;
+
+                    if (runDuration <= 0) {
+                        queue.push(currentProcess);
+                        currentTime++; 
+                        checkArrivals();
+                        continue;
+                    }
+                    
+                    timeline.push({ 
+                        id: currentProcess.id, 
+                        start: currentTime, 
+                        end: runUntil, 
+                        color: currentProcess.color 
+                    });
+
+                    currentProcess.remainingTime -= runDuration;
+                    currentTime = runUntil;
+
+                    checkArrivals();
+                    
+                    if (currentProcess.remainingTime <= 0) {
+                        completedJobs[currentProcess.id] = {
+                            id: currentProcess.id,
+                            arrivalTime: currentProcess.arrivalTime,
+                            finishTime: currentTime,
+                            startTime: currentProcess.startTime
+                        };
+                    } else {
+                        queue.push(currentProcess);
+                    }
+                }
+            }
+
+            const metrics = calculateMetrics(Object.values(completedJobs), currentTime, originalProcesses);
+            return { timeline: simplifyTimeline(timeline), metrics };
+        }
+
+
+        function startSimulation() {
+            if (processes.length === 0) {
+                return showAlert('Cannot Run', 'Please add at least one process to run the simulation.');
+            }
+
+            const selectedAlgorithm = algorithmSelect.value;
+            let result;
+
+            aiTutorOutput.innerHTML = '<div class="flex items-center space-x-2 text-indigo-400"><svg class="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><span class="text-base">AI is analyzing the results...</span></div>';
+
+            switch (selectedAlgorithm) {
+                case 'FCFS (First-Come, First-Served)':
+                    result = runFCFS(processes);
+                    break;
+                case 'SJF (Shortest Job First - Non-Preemptive)':
+                    result = runSJF(processes);
+                    break;
+                case 'EDF (Earliest Deadline First - Preemptive)':
+                    if (processes.some(p => p.deadline === null)) {
+                        return showAlert('Input Required', 'The EDF algorithm requires all processes to have a Deadline defined. Please update your processes.');
+                    }
+                    result = runEDF(processes);
+                    break;
+                case 'RR (Round Robin - Time Quantum: 2)':
+                    result = runRR(processes);
+                    break;
+                default:
+                    return showAlert('Algorithm Error', `The algorithm "${selectedAlgorithm}" is not implemented.`);
+            }
+
+            simulationResult = result;
+            simulationResult.algorithm = selectedAlgorithm;
+            renderGanttChart();
+            
+            explainSimulation();
+        }
+
+        function renderGanttChart() {
+            ganttChart.innerHTML = '';
+            metricsContainer.innerHTML = '';
+
+            if (!simulationResult) {
+                ganttChart.innerHTML = '<p class="text-slate-400">No schedule generated yet. Run the simulation!</p>';
+                return;
+            }
+
+            const { timeline, metrics } = simulationResult;
+            const totalTime = metrics.totalTime;
+
+            if (timeline.length === 0) {
+                 ganttChart.innerHTML = '<p class="text-red-400">Error: No tasks executed. Check your input processes.</p>';
+                 return;
+            }
+
+            timeline.forEach(step => {
+                const duration = step.end - step.start;
+                const widthPercent = (duration / totalTime) * 100;
+                
+                const bar = document.createElement('div');
+                bar.className = `gantt-bar ${step.id === 'Idle' ? 'bg-slate-700' : step.color}`;
+                bar.style.width = `${widthPercent}%`;
+                bar.title = `${step.id} (${step.start} to ${step.end})`;
+                bar.innerHTML = `${step.id === 'Idle' ? 'Idle' : step.id}
+                                 <span class="gantt-time">${step.end}</span>`;
+                
+                ganttChart.appendChild(bar);
+            });
+
+            const startMarker = document.createElement('span');
+            startMarker.className = "gantt-time";
+            startMarker.textContent = "0";
+            ganttChart.style.position = 'relative';
+            ganttChart.prepend(startMarker);
+
+
+            let metricsTableHTML = `
+                <table class="w-full text-left border-collapse">
+                    <thead class="bg-[#2d3a4b]">
+                        <tr>
+                            <th class="p-3">Process</th>
+                            <th class="p-3">Arrival</th>
+                            <th class="p-3">Burst</th>
+                            <th class="p-3">Start</th>
+                            <th class="p-3">Finish</th>
+                            <th class="p-3">Waiting Time</th>
+                            <th class="p-3">Turnaround Time</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            metrics.jobResults.forEach(job => {
+                metricsTableHTML += `
+                    <tr class="border-b border-[#2d3a4b] hover:bg-[#2d3a4b]/50 transition duration-100">
+                        <td class="p-3 font-bold">${job.id}</td>
+                        <td class="p-3">${job.arrivalTime}</td>
+                        <td class="p-3">${job.burstTime}</td>
+                        <td class="p-3">${job.startTime}</td>
+                        <td class="p-3">${job.finishTime}</td>
+                        <td class="p-3">${job.waitingTime}</td>
+                        <td class="p-3">${job.turnaroundTime}</td>
+                    </tr>
+                `;
+            });
+            metricsTableHTML += `
+                    </tbody>
+                </table>
+                <div class="mt-6 flex flex-col md:flex-row justify-between bg-slate-800 p-4 rounded-xl font-bold text-base space-y-2 md:space-y-0">
+                    <span class="text-yellow-400">Avg Waiting Time: ${metrics.avgWaitingTime}</span>
+                    <span class="text-teal-400">Avg Turnaround Time: ${metrics.avgTurnaroundTime}</span>
+                    <span class="text-red-400">Total Completion Time: ${metrics.totalTime}</span>
+                </div>
+            `;
+            metricsContainer.innerHTML = metricsTableHTML;
+        }
+
+        async function explainSimulation() {
+            if (!simulationResult) {
+                return;
+            }
+
+            aiTutorOutput.innerHTML = '<div class="flex items-center space-x-3 text-blue-400"><svg class="animate-spin h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m15.356 2H20M9 20l-1-1m4 1l1-1m-4 1h.01M9 14h.01M15 19h.01"/></svg><span class="text-base">AI is calculating and preparing your detailed lesson...</span></div>';
+
+            const { timeline, metrics, algorithm } = simulationResult;
+            
+            const initialProcesses = processes.map(p => 
+                `ID: ${p.id}, Arr: ${p.arrivalTime}, Burst: ${p.burstTime}` + (p.deadline ? `, Deadline: ${p.deadline}` : '') + (p.priority ? `, Priority: ${p.priority}` : '')
+            ).join('; ');
+            
+            const timelineSummary = timeline.map(t => `${t.id}: ${t.start}-${t.end}`).join(', ');
+            
+            const detailedMetrics = metrics.jobResults.map(job => 
+                `ID: ${job.id} | Arr: ${job.arrivalTime} | Burst: ${job.burstTime} | Finish: ${job.finishTime} | WT: ${job.waitingTime} | TAT: ${job.turnaroundTime}`
+            ).join('\n');
+
+            const userQuery = `
+                Explain the results of this CPU scheduling simulation using the ${algorithm} algorithm.
+                
+                **Initial Processes:** ${initialProcesses}
+                
+                **Detailed Job Metrics:**
+${detailedMetrics}
+
+                **Calculated Overall Metrics:**
+                - Average Waiting Time: ${metrics.avgWaitingTime}
+                - Average Turnaround Time: ${metrics.avgTurnaroundTime}
+                
+                **Gantt Chart Timeline (Process: Start-End):** ${timelineSummary}
+            `;
+
+            const systemPrompt = "You are the 'AI Tutor' for a CPU Scheduling Simulator. Provide a concise explanation (maximum 3 brief paragraphs for narrative context) suitable for a university-level student. Use Markdown headings and line breaks for clear, easy-to-read formatting. Structure your response into 3 main sections: 1) Algorithm Summary (Core rule). 2) **Timeline Breakdown** (Use a concise list or table format for the Gantt chart steps). 3) **Metric Calculations** (Use lists/lists of lists to show the formula and step-by-step calculation for Waiting Time (WT) and Turnaround Time (TAT) for *each process*). Conclude with a short follow-up question.";
+
+            const payload = {
+                contents: [{ parts: [{ text: userQuery }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+            };
+
+            try {
+                const response = await withExponentialBackoff(async () => {
+                    const res = await fetch(API_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+                    return res.json();
+                });
+
+                const text = response.candidates?.[0]?.content?.parts?.[0]?.text || "The AI tutor encountered an issue. Please try running the simulation again.";
+                
+                aiTutorOutput.innerHTML = formatMarkdownToHtml(text);
+
+            } catch (error) {
+                console.error("Gemini API Error:", error);
+                aiTutorOutput.innerHTML = `<p class="text-red-400">Error fetching AI explanation: ${error.message}. Please check your connection or try again.</p>`;
+            }
+        }
+        
+        function formatMarkdownToHtml(markdownText) {
+            let lines = markdownText.split('\n');
+            let html = [];
+            let inList = false;
+
+            const processLine = (line) => {
+                const trimmedLine = line.trim();
+                
+                if (trimmedLine === '') {
+                    if (inList) {
+                        inList = false;
+                        return '</ul>';
+                    }
+                    return '';
+                }
+
+                let processedLine = trimmedLine.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>'); 
+
+                if (processedLine.match(/^###\s/)) {
+                    if (inList) { html.push('</ul>'); inList = false; }
+                    return `<h3 class="text-xl font-semibold mt-4 mb-2 text-white">${processedLine.substring(4).trim()}</h3>`;
+                } else if (processedLine.match(/^##\s/)) {
+                    if (inList) { html.push('</ul>'); inList = false; }
+                    return `<h2 class="text-2xl font-bold mt-6 mb-3 text-blue-300">${processedLine.substring(3).trim()}</h2>`;
+                } else if (processedLine.match(/^[-\*]\s/)) {
+                    const content = processedLine.substring(1).trim();
+                    if (!inList) { 
+                        inList = true;
+                        return `<ul class="list-disc list-inside space-y-1 mt-2 mb-2"><li>${content}</li>`;
+                    }
+                    return `<li>${content}</li>`;
+                } else {
+                    if (inList) { html.push('</ul>'); inList = false; }
+                    return `<p class="mt-2 mb-2">${processedLine}</p>`;
+                }
+            };
+
+            for (let line of lines) {
+                const processed = processLine(line);
+                if (processed) {
+                    html.push(processed);
+                }
+            }
+
+            if (inList) {
+                html.push('</ul>');
+            }
+
+            return html.join('');
+        }
+
+
+        processes.push({ id: 'P1', arrivalTime: 0, burstTime: 8, deadline: 15, priority: null, remainingTime: 8, color: getProcessColor('P1') });
+        processes.push({ id: 'P2', arrivalTime: 2, burstTime: 4, deadline: 9, priority: null, remainingTime: 4, color: getProcessColor('P2') });
+        processes.push({ id: 'P3', arrivalTime: 5, burstTime: 2, deadline: 12, priority: null, remainingTime: 2, color: getProcessColor('P3') });
+
+        renderProcesses();
+        toggleRequiredInputs();
+    </script>
+</body>
+</html>
+
